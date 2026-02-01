@@ -1,0 +1,818 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Polygon Dot- Polygon Earn</title>
+    
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Tailwind for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & Babel Standalone -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Firebase Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
+        :root {
+            --bg-color: #eab308;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text-main: #eab308;
+            --text-dim: #eab308;
+            --accent: #eab308;
+            --accent-glow: #eab308;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0; padding: 0;
+            overflow-x: hidden;
+            font-size: 12px;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background-color 0.5s ease;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .glass {
+            background: #eab308;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-glass {
+            background: #eab308;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .gradient-main {
+            background: linear-gradient(135deg, var(--accent) 0%, #eab308 150%);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: #ffffff;
+            font-weight: 800;
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px var(--accent-glow);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-accent:active { transform: scale(0.96); filter: brightness(1.2); }
+
+        #toast-container {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            width: 90%;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: #eab308;
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 10px;
+            margin-bottom: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: toastIn 0.3s ease-out forwards;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .status-pending { background: rgba(234, 179, 8, 0.1); color: #eab308; }
+        .status-approved { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+        .status-rejected { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+        @keyframes slideUp {
+            from { transform: translateY(15px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+    </style>
+</head>
+<body>
+    <div id="toast-container"></div>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzr281kcHUjetDCjrydYecQ52SelkP_wA",
+            authDomain: "studio-8426444041-5c7cd.firebaseapp.com",
+            databaseURL: "https://studio-8426444041-5c7cd-default-rtdb.firebaseio.com",
+            projectId: "studio-8426444041-5c7cd",
+            storageBucket: "studio-8426444041-5c7cd.firebasestorage.app",
+            messagingSenderId: "139706024180",
+            appId: "1:139706024180:web:06df8166b5791405a6dea1"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const tg = window.Telegram?.WebApp;
+        const haptic = {
+            impact: (s = 'medium') => tg?.HapticFeedback?.impactOccurred(s),
+            notify: (t = 'success') => tg?.HapticFeedback?.notificationOccurred(t),
+            selection: () => tg?.HapticFeedback?.selectionChanged()
+        };
+
+        const showToast = (message, icon = "🔯") => {
+            const container = document.getElementById('toast-container');
+            if(!container) return;
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        const THEMES = {
+            azure: { bg: '#020617', accent: '#3b82f6', glow: 'rgba(59, 130, 246, 0.3)' },
+            emerald: { bg: '#020617', accent: '#020617', glow: 'rgba(16, 185, 129, 0.3)' },
+            sunset: { bg: '#1e1b4b', accent: '#020617', glow: 'rgba(245, 158, 11, 0.3)' },
+            crimson: { bg: '#09090b', accent: '#020617', glow: 'rgba(244, 63, 94, 0.3)' }
+        };
+
+        const safeFormat = (val) => {
+            const n = Number(val);
+            return isNaN(n) ? "0" : n.toLocaleString();
+        };
+
+        const TaskCard = ({ task, user, isPending, isCompleted, currency }) => {
+            const [expanded, setExpanded] = useState(false);
+            const [proof, setProof] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const submitTask = async () => {
+                if (!proof) return showToast("screenshot Required", "📸");
+                setLoading(true);
+                try {
+                    const subRef = db.ref('submissions').push();
+                    await subRef.set({
+                        id: subRef.key, uid: user.uid, username: user.username,
+                        taskId: task.id, taskTitle: task.title, reward: task.reward,
+                        proof, status: 'pending', timestamp: Date.now()
+                    });
+                    showToast("screenshot sent for review", "📡");
+                    setExpanded(false);
+                    haptic.notify('success');
+                } catch(e) { showToast("Sending screenshot Failure", "❌"); }
+                finally { setLoading(false); }
+            };
+
+            const isDisabled = isPending || isCompleted;
+
+            return (
+                <div className={`card overflow-hidden transition-all duration-300 ${isDisabled ? 'opacity-60' : 'hover:border-white/20'}`}>
+                    <div onClick={() => { if(!isDisabled) { setExpanded(!expanded); haptic.selection(); } }} className="p-3 flex items-center justify-between cursor-pointer">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl shadow-inner border border-white/5">{task.icon || '🎁'}</div>
+                            <div>
+                                <h4 className="text-[11px] font-bold text-white uppercase tracking-tight">{task.title}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[9px] font-black text-[var(--text-main)]">+{safeFormat(task.reward)} {currency}</span>
+                                    {isPending && <span className="status-badge status-pending">Pending</span>}
+                                    {isCompleted && <span className="status-badge status-approved">Approved</span>}
+                                </div>
+                            </div>
+                        </div>
+                        {!isDisabled && <div className={`text-white/20 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}>⁉️</div>}
+                    </div>
+                    {expanded && !isDisabled && (
+                        <div className="px-3 pb-3 space-y-3 bg-white/[0.02] border-t border-white/5 animate-slide-up">
+                            <p className="text-[10px] text-slate-400 font-medium leading-relaxed pt-2">{task.description}</p>
+                            {task.link && (
+                                <button onClick={() => { window.open(task.link, '_blank'); haptic.impact('light'); }} className="w-full py-2 bg-white/10 text-white rounded-lg text-[9px] font-black uppercase tracking-widest border border-white/10">Start Task</button>
+                            )}
+                            <div className="space-y-1">
+                                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Verify Task</label>
+                                <div className="relative h-24 bg-black/40 rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center overflow-hidden">
+                                    <input type="file" accept="image/*" onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if(!file) return;
+                                        const reader = new FileReader();
+                                        reader.onload = (ev) => setProof(ev.target?.result);
+                                        reader.readAsDataURL(file);
+                                    }} className="absolute inset-0 opacity-0 z-10 cursor-pointer" />
+                                    {proof ? <img src={proof} className="w-full h-full object-cover" /> : (
+                                        <div className="text-center">
+                                            <span className="text-xl mb-1 block">📸</span>
+                                            <span className="text-[8px] font-bold text-slate-500 uppercase">Capture Screenshot</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <button disabled={loading || !proof} onClick={submitTask} className="btn-accent w-full py-3 text-[10px]">
+                                {loading ? 'Sending...' : 'Confirm Task'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const AdminPanel = ({ onExit, tasks, appConfig }) => {
+            const [view, setView] = useState('subs');
+            const [subs, setSubs] = useState([]);
+            const [withdrawals, setWithdrawals] = useState([]);
+            const [taskForm, setTaskForm] = useState({ id: '', title: '', description: '', reward: 1000, icon: '🎁', link: '' });
+            const [settingsForm, setSettingsForm] = useState({ ...appConfig });
+            const [showMaintenance, setShowMaintenance] = useState(false);
+
+            useEffect(() => {
+                const sRef = db.ref('submissions');
+                sRef.on('value', s => setSubs(s.exists() ? Object.values(s.val()) : []));
+                
+                const wRef = db.ref('withdrawals');
+                wRef.on('value', s => setWithdrawals(s.exists() ? Object.values(s.val()) : []));
+                
+                return () => { sRef.off(); wRef.off(); };
+            }, []);
+
+            const saveTask = async () => {
+                if(!taskForm.title) return;
+                const id = taskForm.id || db.ref('tasks').push().key;
+                await db.ref(`tasks/${id}`).set({ ...taskForm, id });
+                setTaskForm({ id: '', title: '', description: '', reward: 1000, icon: '🎯', link: '' });
+                showToast("Task Saved", "🚀");
+            };
+
+            const deleteTask = async (id) => {
+                if(confirm("Confirm task deletion?")) {
+                    await db.ref(`tasks/${id}`).remove();
+                    showToast("Task Deleted", "🗑️");
+                }
+            };
+
+            const wipeData = async (node) => {
+                if(confirm(`⚠️ DANGER: Permanent destruction of ${node} data. Proceed?`)) {
+                    await db.ref(node).remove();
+                    showToast(`${node} Wiped`, "💥");
+                }
+            };
+
+            const editTask = (t) => {
+                setTaskForm(t);
+                setView('tasks');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+
+            const saveSettings = async () => {
+                await db.ref('config/app').set(settingsForm);
+                showToast("Logic Updated", "⚙️");
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black text-white flex flex-col p-4 overflow-y-auto z-[2000] no-scrollbar">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-[10px] font-black text-[var(--accent)] uppercase tracking-widest italic">Panel Admin</h2>
+                        <button onClick={onExit} className="bg-white/5 px-4 py-2 rounded-lg text-[9px] font-black uppercase text-slate-400 border border-white/5">Close</button>
+                    </div>
+                    
+                    <div className="flex gap-1.5 mb-6 overflow-x-auto no-scrollbar">
+                        {[
+                            {id: 'subs', label: 'Missions'}, 
+                            {id: 'payouts', label: 'Payouts'}, 
+                            {id: 'tasks', label: 'Task MGMT'}, 
+                            {id: 'settings', label: 'Config'},
+                            {id: 'maintenance', label: 'Wipe Data'}
+                        ].map(v => (
+                            <button key={v.id} onClick={() => setView(v.id)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border shrink-0 transition-all ${view === v.id ? 'bg-[var(--accent)] border-transparent text-white' : 'bg-white/5 border-white/5 text-slate-500'}`}>{v.label}</button>
+                        ))}
+                    </div>
+
+                    {view === 'subs' && (
+                        <div className="space-y-4">
+                            <h3 className="text-[9px] font-black uppercase text-slate-500 mb-2">Pending Tasks</h3>
+                            {subs.filter(s => s.status === 'pending').length === 0 && <p className="text-center text-[9px] text-slate-600 uppercase py-10 tracking-[3px]">All Cleared</p>}
+                            {subs.filter(s => s.status === 'pending').map(s => (
+                                <div key={s.id} className="card p-4 space-y-3">
+                                    <div className="flex justify-between">
+                                        <span className="text-[10px] font-black text-[var(--accent)]">@{s.username}</span>
+                                        <span className="text-[8px] text-slate-500">{new Date(s.timestamp).toLocaleTimeString()}</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold uppercase">{s.taskTitle}</p>
+                                    {s.proof && <img src={s.proof} className="w-full h-48 object-cover rounded-xl border border-white/10" />}
+                                    <div className="flex gap-2">
+                                        <button onClick={async () => {
+                                            await db.ref(`users/${s.uid}`).transaction(u => { if (u) u.points = (u.points || 0) + Number(s.reward); return u; });
+                                            await db.ref(`submissions/${s.id}/status`).set('approved');
+                                            showToast("Verified", "✅");
+                                        }} className="flex-1 bg-green-500 py-2.5 rounded-lg text-[9px] font-black uppercase text-black">Approve</button>
+                                        <button onClick={() => db.ref(`submissions/${s.id}/status`).set('rejected')} className="flex-1 bg-red-500/10 py-2.5 rounded-lg text-[9px] font-black uppercase text-red-500">Deny</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {view === 'payouts' && (
+                        <div className="space-y-4">
+                            <h3 className="text-[9px] font-black uppercase text-slate-500 mb-2">Payouts history</h3>
+                            {withdrawals.filter(w => w.status === 'pending').length === 0 && <p className="text-center text-[9px] text-slate-600 uppercase py-10 tracking-[3px]">Zero Pending</p>}
+                            {withdrawals.filter(w => w.status === 'pending').map(w => (
+                                <div key={w.id} className="card p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <span className="text-[10px] font-black text-[var(--accent)]">@{w.username}</span>
+                                            <p className="text-[12px] font-black mt-1">{safeFormat(w.amount)} {w.currency}</p>
+                                        </div>
+                                        <span className="text-[8px] text-slate-500">{new Date(w.timestamp).toLocaleString()}</span>
+                                    </div>
+                                    <div className="bg-black/40 p-2 rounded-lg border border-white/5 select-all">
+                                        <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Destination</p>
+                                        <code className="text-[9px] text-white block break-all">{w.address}</code>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => {
+                                            db.ref(`withdrawals/${w.id}/status`).set('approved');
+                                            showToast("Withdraw Complete", "💸");
+                                        }} className="flex-1 bg-[var(--accent)] py-2.5 rounded-lg text-[9px] font-black uppercase text-white">Approve</button>
+                                        <button onClick={async () => {
+                                            await db.ref(`users/${w.uid}/points`).transaction(p => (p || 0) + Number(w.amount));
+                                            await db.ref(`withdrawals/${w.id}/status`).set('rejected');
+                                            showToast("withdraw canceled", "❌");
+                                        }} className="flex-1 bg-red-500/10 py-2.5 rounded-lg text-[9px] font-black uppercase text-red-500">Reject</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {view === 'tasks' && (
+                        <div className="space-y-6">
+                            <div className="card p-4 space-y-4">
+                                <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-500">{taskForm.id ? 'Edit Mission' : 'New Mission'}</h3>
+                                <input value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" placeholder="Mission Title" />
+                                <textarea value={taskForm.description} onChange={e => setTaskForm({...taskForm, description: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" placeholder="Briefing / Requirements" rows="2" />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input type="number" value={taskForm.reward} onChange={e => setTaskForm({...taskForm, reward: Number(e.target.value)})} className="bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" placeholder="Reward Amount" />
+                                    <input value={taskForm.icon} onChange={e => setTaskForm({...taskForm, icon: e.target.value})} className="bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" placeholder="Emoji Icon" />
+                                </div>
+                                <input value={taskForm.link} onChange={e => setTaskForm({...taskForm, link: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" placeholder="External URL (Optional)" />
+                                <div className="flex gap-2">
+                                    <button onClick={saveTask} className="flex-1 btn-accent py-3 text-[9px]">{taskForm.id ? 'Update Mission' : 'Launch Mission'}</button>
+                                    {taskForm.id && <button onClick={() => setTaskForm({ id: '', title: '', description: '', reward: 1000, icon: '🎯', link: '' })} className="flex-1 bg-white/5 rounded-lg text-[9px] font-black uppercase">Cancel</button>}
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-1"> Objectives</h3>
+                                {tasks.map(t => (
+                                    <div key={t.id} className="card p-3 flex justify-between items-center">
+                                        <div>
+                                            <p className="text-[10px] font-black">{t.icon} {t.title}</p>
+                                            <p className="text-[8px] text-slate-500">{t.reward} {appConfig.currency}</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => editTask(t)} className="p-2 bg-white/5 rounded-lg text-xs">✏️</button>
+                                            <button onClick={() => deleteTask(t.id)} className="p-2 bg-red-500/10 text-red-500 rounded-lg text-xs">🗑️</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'settings' && (
+                        <div className="space-y-4 pb-10">
+                            <div className="card p-4 space-y-4">
+                                <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-500">Core Logic</h3>
+                                <div className="space-y-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black uppercase text-slate-500">Internal App Name (UI)</label>
+                                        <input value={settingsForm.appName} onChange={e => setSettingsForm({...settingsForm, appName: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black uppercase text-slate-500">BotFather Display Name</label>
+                                        <input value={settingsForm.botDisplayName} onChange={e => setSettingsForm({...settingsForm, botDisplayName: e.target.value})} placeholder="e.g. AzureEarn Pro Bot" className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-500">Currency Symbol</label>
+                                            <input value={settingsForm.currency} onChange={e => setSettingsForm({...settingsForm, currency: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-500">Admin PIN</label>
+                                            <input value={settingsForm.adminPin} onChange={e => setSettingsForm({...settingsForm, adminPin: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-500">Min withdrawal</label>
+                                            <input type="number" value={settingsForm.minWithdrawal} onChange={e => setSettingsForm({...settingsForm, minWithdrawal: Number(e.target.value)})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-500">Invite Bonus</label>
+                                            <input type="number" value={settingsForm.referralReward} onChange={e => setSettingsForm({...settingsForm, referralReward: Number(e.target.value)})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-500">Bot Username (No @)</label>
+                                            <input value={settingsForm.botUsername} onChange={e => setSettingsForm({...settingsForm, botUsername: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-500">App Short Name (URL)</label>
+                                            <input value={settingsForm.appShortName} onChange={e => setSettingsForm({...settingsForm, appShortName: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-[11px]" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={saveSettings} className="w-full btn-accent py-3 text-[9px]">Apply Changes</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'maintenance' && (
+                        <div className="space-y-6">
+                            <h3 className="text-[9px] font-black uppercase text-red-500 mb-2 tracking-[2px]">Danger Zone - Database Maintenance</h3>
+                            <div className="card p-4 border-red-500/20 space-y-4">
+                                <p className="text-[9px] text-slate-500 leading-relaxed uppercase">The following actions will permanently delete records from the linked database nodes. Proceed with extreme caution.</p>
+                                <button onClick={() => wipeData('submissions')} className="w-full py-3 bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase rounded-xl">Clear All Mission Logs</button>
+                                <button onClick={() => wipeData('withdrawals')} className="w-full py-3 bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase rounded-xl">Clear All Payout Records</button>
+                                <button onClick={() => wipeData('users')} className="w-full py-3 bg-red-500 text-black text-[9px] font-black uppercase rounded-xl shadow-lg shadow-red-500/20">Wipe All Protocol Users</button>
+                                <button onClick={() => wipeData('tasks')} className="w-full py-3 bg-white/5 border border-white/10 text-white text-[9px] font-black uppercase rounded-xl">Reset Objective List</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [onboarding, setOnboarding] = useState(false);
+            const [activeTab, setActiveTab] = useState('earn');
+            const [tasks, setTasks] = useState([]);
+            const [userSubmissions, setUserSubmissions] = useState([]);
+            const [userWithdrawals, setUserWithdrawals] = useState([]);
+            const [leaderboard, setLeaderboard] = useState([]);
+            const [appConfig, setAppConfig] = useState({ 
+                appName: 'AzureEarn Pro', 
+                botDisplayName: 'AzureEarn Bot',
+                minWithdrawal: 1000, 
+                referralReward: 500, 
+                adminPin: '2025', 
+                currency: 'TON', 
+                botUsername: 'AzureEarnBot', 
+                appShortName: 'join', 
+                activeTheme: 'azure' 
+            });
+            const [showAdmin, setShowAdmin] = useState(false);
+            const [showPin, setShowPin] = useState(false);
+            const [isConnected, setIsConnected] = useState(false);
+            const [balanceClicks, setBalanceClicks] = useState(0);
+
+            useEffect(() => {
+                if (tg) { tg.ready(); tg.expand(); }
+                
+                const userId = tg?.initDataUnsafe?.user?.id?.toString() || localStorage.getItem('azure_uid') || 'u_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('azure_uid', userId);
+
+                const userRef = db.ref(`users/${userId}`);
+                userRef.on('value', s => {
+                    if (s.exists()) { setUser(s.val()); setOnboarding(false); } 
+                    else { setOnboarding(true); }
+                    setLoading(false);
+                });
+
+                db.ref('tasks').on('value', s => { if (s.exists()) setTasks(Object.entries(s.val()).map(([k, v]) => ({ ...v, id: k }))); });
+                db.ref('config/app').on('value', s => { if (s.exists()) setAppConfig(p => ({...p, ...s.val()})); });
+                db.ref('submissions').orderByChild('uid').equalTo(userId).on('value', s => {
+                    if (s.exists()) {
+                        const data = Object.values(s.val()).sort((a,b) => b.timestamp - a.timestamp);
+                        setUserSubmissions(data);
+                    } else {
+                        setUserSubmissions([]);
+                    }
+                });
+                db.ref('withdrawals').orderByChild('uid').equalTo(userId).on('value', s => {
+                    if (s.exists()) {
+                        const data = Object.values(s.val()).sort((a,b) => b.timestamp - a.timestamp);
+                        setUserWithdrawals(data);
+                    } else {
+                        setUserWithdrawals([]);
+                    }
+                });
+                db.ref('users').orderByChild('points').limitToLast(10).on('value', s => {
+                    if (s.exists()) setLeaderboard(Object.values(s.val()).sort((a,b) => (b.points || 0) - (a.points || 0)));
+                });
+                db.ref(".info/connected").on("value", s => setIsConnected(s.val() === true));
+
+                return () => db.ref().off();
+            }, []);
+
+            useEffect(() => {
+                const theme = THEMES[appConfig.activeTheme] || THEMES.azure;
+                const root = document.documentElement;
+                root.style.setProperty('--bg-color', theme.bg);
+                root.style.setProperty('--accent', theme.accent);
+                root.style.setProperty('--accent-glow', theme.glow);
+            }, [appConfig.activeTheme]);
+
+            const register = async () => {
+                const userId = localStorage.getItem('azure_uid');
+                const startParam = tg?.initDataUnsafe?.start_param;
+                
+                const userData = {
+                    uid: userId, 
+                    username: tg?.initDataUnsafe?.user?.username || 'user_' + userId.slice(-4),
+                    points: 0, 
+                    completedTasks: [], 
+                    referralCount: 0, 
+                    timestamp: Date.now()
+                };
+
+                // Check for valid referral
+                if (startParam && startParam !== userId) {
+                    userData.referredBy = startParam;
+                    // Credit the referrer
+                    db.ref(`users/${startParam}`).transaction(u => {
+                        if (u) {
+                            u.points = (u.points || 0) + (appConfig.referralReward || 500);
+                            u.referralCount = (u.referralCount || 0) + 1;
+                        }
+                        return u;
+                    });
+                    showToast("You are welcome to Polygon Dot", "🎊");
+                }
+
+                await db.ref(`users/${userId}`).set(userData);
+            };
+
+            const handleSecretGesture = () => {
+                if (activeTab !== 'earn') return;
+                const next = balanceClicks + 1;
+                setBalanceClicks(next);
+                if (next >= 12) { setBalanceClicks(0); setShowPin(true); haptic.notify('warning'); }
+            };
+
+            if (loading) return <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#eab308] text-white">
+                <div className="w-12 h-12 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-[9px] uppercase tracking-[4px]">Opening Polygon Dot...</p>
+            </div>;
+
+            if (onboarding) return (
+                <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 gradient-main rounded-2xl mb-6 flex items-center justify-center text-white text-3xl shadow-2xl">🔯</div>
+                    <h1 className="text-xl font-black text-white mb-2">{appConfig.appName}</h1>
+                    <p className="text-[10px] text-slate-500 mb-8 leading-relaxed">POLYGON DOT.<b/>Go and start earning now.</p>
+                    <button onClick={register} className="btn-accent w-full py-4 text-[11px]"
+                    >Earn Massive Polygon</button>
+                </div>
+            );
+
+            if (showPin) return (
+                <div className="fixed inset-0 bg-black/95 flex flex-col items-center justify-center p-10 z-[3000]">
+                    <h2 className="text-[10px] font-black uppercase text-[var(--accent)] mb-6">Authorize Admin Access</h2>
+                    <input type="password" maxLength={4} onChange={e => { 
+                        if(e.target.value === appConfig.adminPin) { setShowAdmin(true); setShowPin(false); haptic.notify('success'); }
+                    }} className="w-32 bg-transparent border-b-2 border-white/10 text-center text-4xl font-black outline-none text-white" placeholder="••••" autoFocus />
+                    <button onClick={() => setShowPin(false)} className="mt-8 text-[9px] font-black text-slate-600 uppercase">Abort Task</button>
+                </div>
+            );
+
+            return (
+                <div className="flex flex-col min-h-screen max-w-md mx-auto relative pb-24">
+                    {showAdmin && <AdminPanel onExit={() => setShowAdmin(false)} tasks={tasks} appConfig={appConfig} />}
+
+                    <header className="px-4 py-4 flex justify-between items-center sticky top-0 z-50 glass">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl gradient-main flex items-center justify-center text-white font-black text-xs">
+                                {user?.username ? user.username[0].toUpperCase() : 'A'}
+                            </div>
+                            <div>
+                                <h1 className="text-[11px] font-black text-white leading-none">@{user?.username}</h1>
+                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-wider mt-0.5 flex items-center gap-1">
+                                    <span className={`w-1 h-1 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                    {appConfig.botDisplayName} APP
+                                </p>
+                            </div>
+                        </div>
+                        <button onClick={() => {
+                            const keys = Object.keys(THEMES);
+                            const nextKey = keys[(keys.indexOf(appConfig.activeTheme) + 1) % keys.length];
+                            setAppConfig({...appConfig, activeTheme: nextKey});
+                        }} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 text-base">🔄</button>
+                    </header>
+
+                    <main className="px-4 pt-4 flex-1 space-y-6">
+                        {activeTab === 'earn' && (
+                            <div className="space-y-6 animate-slide-up">
+                                <div onClick={handleSecretGesture} className="gradient-main rounded-[1.5rem] p-6 text-white shadow-xl relative overflow-hidden active:scale-[0.98] transition-all">
+                                    <p className="text-[9px] font-black opacity-50 uppercase tracking-[2px] mb-2">POLYGON</p>
+                                    <h2 className="text-3xl font-black tracking-tighter mb-6 flex items-baseline gap-1.5">
+                                        {safeFormat(user?.points)} 
+                                        <span className="text-[10px] font-bold opacity-30">{appConfig.currency}</span>
+                                    </h2>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                            <p className="text-[7px] font-black opacity-40 uppercase mb-0.5">Tasks</p>
+                                            <p className="text-sm font-black">{userSubmissions.filter(s=>s.status==='approved').length}</p>
+                                        </div>
+                                        <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                            <p className="text-[7px] font-black opacity-40 uppercase mb-0.5">Invite</p>
+                                            <p className="text-sm font-black">{user?.referralCount || 0}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => setActiveTab('tasks')} className="card p-4 flex flex-col items-center gap-2">
+                                        <span className="text-xl">🎁</span>
+                                        <span className="text-[9px] font-black text-slate-300 uppercase">Pol Tasks</span>
+                                    </button>
+                                    <button onClick={() => setActiveTab('wallet')} className="card p-4 flex flex-col items-center gap-2">
+                                        <span className="text-xl">🏛️</span>
+                                        <span className="text-[9px] font-black text-slate-300 uppercase">Withdraw Pol</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'tasks' && (
+                            <div className="space-y-4 animate-slide-up">
+                                <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Tasks Historys</h2>
+                                {tasks.length === 0 && <p className="text-center text-[9px] text-slate-600 uppercase py-10">No Tasks available</p>}
+                                {tasks.map(t => {
+                                    const sub = userSubmissions.find(s => s.taskId === t.id);
+                                    return <TaskCard key={t.id} task={t} user={user} isPending={sub?.status === 'pending'} isCompleted={sub?.status === 'approved'} currency={appConfig.currency} />;
+                                })}
+                            </div>
+                        )}
+
+                        {activeTab === 'ranks' && (
+                            <div className="space-y-4 animate-slide-up pb-8">
+                                <h2 className="text-center text-[10px] font-black text-slate-500 uppercase tracking-widest">Top 10 leaderboards</h2>
+                                <div className="space-y-2">
+                                    {leaderboard.map((item, idx) => (
+                                        <div key={item.uid} className={`card p-3 flex items-center justify-between ${item.uid === user?.uid ? 'border-[var(--text-main)]' : ''}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[9px] ${idx < 3 ? 'bg-[var(--accent)] text-white' : 'bg-white/5 text-slate-600'}`}>{idx + 1}</div>
+                                                <p className="text-[10px] font-black text-white">@{item.username}</p>
+                                            </div>
+                                            <p className="text-[11px] font-black text-[var(--text-main)]">{safeFormat(item.points)}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'frens' && (
+                            <div className="space-y-6 animate-slide-up text-center pt-4">
+                                <div className="w-20 h-20 bg-[var(--accent-glow)] rounded-[2rem] mx-auto flex items-center justify-center text-3xl mb-4 border border-white/5">👥</div>
+                                <h2 className="text-xl font-black text-white">invites contests</h2>
+                                <p className="text-[10px] font-medium text-slate-500 px-8 leading-relaxed">Get <span className="text-[var(--text-main)]">+{safeFormat(appConfig.referralReward)} {appConfig.currency}</span> for every verified invites.</p>
+                                <button onClick={() => { 
+                                    const link = `https://t.me/${appConfig.botUsername}?start=${user?.uid}`;
+                                    navigator.clipboard.writeText(link);
+                                    showToast(" Referral Link Copied to clipboard", "📋");
+                                }} className="btn-accent w-full py-4 text-[10px]">Copy Referral Link</button>
+                            </div>
+                        )}
+
+                        {activeTab === 'wallet' && (
+                            <div className="space-y-6 animate-slide-up pb-10">
+                                <div className="gradient-main rounded-3xl p-6 text-white text-center shadow-lg">
+                                    <p className="text-[9px] font-black opacity-50 uppercase mb-2">Ready to withdraw POL</p>
+                                    <h2 className="text-3xl font-black tracking-tighter">{safeFormat(user?.points)} <span className="text-[10px] opacity-30">{appConfig.currency}</span></h2>
+                                </div>
+                                <div className="card p-6 space-y-4">
+                                    <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Withdraw POL</h3>
+                                    <input type="number" id="wAmount" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-[11px] text-white outline-none" placeholder={`Min Amount: ${appConfig.minWithdrawal}`} />
+                                    <input id="wAddr" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-[11px] text-white outline-none" placeholder={`${appConfig.currency}  address (Polygon)`} />
+                                    <button onClick={async () => {
+                                        const amtInput = document.getElementById('wAmount');
+                                        const addrInput = document.getElementById('wAddr');
+                                        const amt = Number(amtInput.value);
+                                        const addr = addrInput.value;
+                                        if(amt < appConfig.minWithdrawal) return showToast("Below Minimum", "❌");
+                                        if(amt > (user?.points || 0)) return showToast("Insufficient Funds", "❌");
+                                        if(!addr) return showToast(" polygon address required for withdrawal", "📍");
+                                        
+                                        const req = db.ref('withdrawals').push();
+                                        await req.set({ uid: user.uid, username: user.username, amount: amt, address: addr, status: 'pending', timestamp: Date.now(), currency: appConfig.currency, id: req.key });
+                                        await db.ref(`users/${user.uid}/points`).transaction(p => (p || 0) - amt);
+                                        
+                                        amtInput.value = ''; addrInput.value = '';
+                                        showToast(" Pol Withdraw sent for review", "🛰️");
+                                    }} className="btn-accent w-full py-4 text-[10px]">Confirm Withdraw</button>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    <div className="flex gap-2 px-1">
+                                        <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex-1">History Activity</h3>
+                                    </div>
+
+                                    {/* Payout History Section */}
+                                    <div className="space-y-2">
+                                        <p className="text-[8px] font-black text-slate-600 uppercase px-1">Withdrawals</p>
+                                        {userWithdrawals.length === 0 ? <p className="text-[8px] text-slate-700 px-1 uppercase">No withdrawal done by you</p> : 
+                                            userWithdrawals.map(w => (
+                                                <div key={w.id} className="card p-3 flex justify-between items-center bg-white/[0.02]">
+                                                    <div>
+                                                        <p className="text-[10px] font-black">{safeFormat(w.amount)} {w.currency}</p>
+                                                        <p className="text-[7px] text-slate-500">{new Date(w.timestamp).toLocaleDateString()} • {new Date(w.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                                    </div>
+                                                    <span className={`status-badge status-${w.status}`}>{w.status}</span>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+
+                                    {/* Mission History Section */}
+                                    <div className="space-y-2 mt-4">
+                                        <p className="text-[8px] font-black text-slate-600 uppercase px-1">Tasks</p>
+                                        {userSubmissions.filter(s => s.status === 'approved').length === 0 ? <p className="text-[8px] text-slate-700 px-1 uppercase">No Submitted tasks found</p> : 
+                                            userSubmissions.filter(s => s.status === 'approved').map(s => (
+                                                <div key={s.id} className="card p-3 flex justify-between items-center bg-white/[0.02]">
+                                                    <div>
+                                                        <p className="text-[10px] font-black">+{safeFormat(s.reward)} {appConfig.currency}</p>
+                                                        <p className="text-[7px] text-slate-500 uppercase tracking-tighter">{s.taskTitle}</p>
+                                                    </div>
+                                                    <span className="status-badge status-approved">Verified</span>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <nav className="fixed bottom-0 left-0 right-0 z-[100] px-4 pb-6 flex justify-center">
+                        <div className="max-w-md w-full h-16 nav-glass rounded-3xl shadow-2xl flex items-center justify-around px-1">
+                            {[
+                                { id: 'earn', icon: '🎁', label: 'Pol Bal' },
+                                { id: 'ranks', icon: '🏆', label: 'Ranks' },
+                                { id: 'frens', icon: '👥', label: 'Refer' }
+                            ].map(tab => (
+                                <button key={tab.id} onClick={() => { haptic.selection(); setActiveTab(tab.id); }} className={`flex flex-col items-center justify-center w-12 h-12 transition-all duration-300 rounded-xl ${activeTab === tab.id ? 'text-[var(--accent)] bg-[var(--accent-glow)]' : 'text-slate-600'}`}>
+                                    <span className="text-lg">{tab.icon}</span>
+                                    <span className="text-[7px] font-black mt-0.5 uppercase">{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
